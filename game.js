@@ -6,23 +6,34 @@ function resize() {
     canvas.height = window.innerHeight;
 }
 resize();
-
 window.addEventListener("resize", resize);
 
 let gameOver = false;
 let power = 0;
 let distance = 0;
+let combo = 0;
+
+const feedbackEl = document.getElementById("feedback");
 
 const player = {
     x: 150,
     y: 0,
     vy: 0,
-    size: 50,
     jumping: false,
     rotation: 0
 };
 
 const obstacles = [];
+
+function showFeedback(text) {
+    feedbackEl.textContent = text;
+
+    setTimeout(() => {
+        if (feedbackEl.textContent === text) {
+            feedbackEl.textContent = "";
+        }
+    }, 700);
+}
 
 function spawnObstacle() {
 
@@ -55,22 +66,14 @@ document.addEventListener("keydown", e => {
     if (gameOver && e.key.toLowerCase() === "r") {
         restartGame();
     }
-
-});
-
-canvas.addEventListener("click", () => {
-
-    if (gameOver) return;
-
-    power = Math.min(100, power + 20);
 });
 
 function restartGame() {
 
     gameOver = false;
-
     power = 0;
     distance = 0;
+    combo = 0;
 
     player.y = 0;
     player.vy = 0;
@@ -78,7 +81,203 @@ function restartGame() {
     player.rotation = 0;
 
     obstacles.length = 0;
+
+    feedbackEl.textContent = "";
 }
+
+/* -------------------------
+   ROLL DETECTION
+------------------------- */
+
+let drawing = false;
+let points = [];
+
+function beginGesture(x, y) {
+
+    if (gameOver) return;
+
+    drawing = true;
+    points = [[x, y]];
+}
+
+function moveGesture(x, y) {
+
+    if (!drawing) return;
+
+    points.push([x, y]);
+}
+
+function endGesture() {
+
+    if (!drawing) return;
+
+    drawing = false;
+
+    if (points.length < 15) {
+        points = [];
+        return;
+    }
+
+    const first = points[0];
+    const last = points[points.length - 1];
+
+    const dx = last[0] - first[0];
+    const dy = last[1] - first[1];
+
+    // swipe up jump
+    if (
+        dy < -80 &&
+        Math.abs(dy) > Math.abs(dx)
+    ) {
+        jump();
+        points = [];
+        return;
+    }
+
+    let dirs = [];
+
+    for (let i = 1; i < points.length; i += 3) {
+
+        const mx =
+            points[i][0] - points[i - 1][0];
+
+        const my =
+            points[i][1] - points[i - 1][1];
+
+        if (Math.abs(mx) > Math.abs(my)) {
+            dirs.push(mx > 0 ? "R" : "L");
+        } else {
+            dirs.push(my > 0 ? "D" : "U");
+        }
+    }
+
+    let changes = 0;
+
+    for (let i = 1; i < dirs.length; i++) {
+        if (dirs[i] !== dirs[i - 1]) {
+            changes++;
+        }
+    }
+
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+
+    points.forEach(p => {
+        minX = Math.min(minX, p[0]);
+        maxX = Math.max(maxX, p[0]);
+
+        minY = Math.min(minY, p[1]);
+        maxY = Math.max(maxY, p[1]);
+    });
+
+    const width = maxX - minX;
+    const height = maxY - minY;
+
+    if (
+        changes >= 4 &&
+        width > 60 &&
+        height > 60
+    ) {
+
+        const quality =
+            Math.min(width, height);
+
+        if (quality > 150) {
+
+            power = Math.min(
+                100,
+                power + 30
+            );
+
+            combo++;
+
+            showFeedback(
+                "🔥 PERFECT ROLL"
+            );
+
+        } else {
+
+            power = Math.min(
+                100,
+                power + 20
+            );
+
+            combo++;
+
+            showFeedback(
+                "🥋 GOOD ROLL"
+            );
+        }
+
+    } else {
+
+        combo = 0;
+    }
+
+    points = [];
+}
+
+/* mouse */
+
+canvas.addEventListener(
+    "mousedown",
+    e => beginGesture(
+        e.clientX,
+        e.clientY
+    )
+);
+
+canvas.addEventListener(
+    "mousemove",
+    e => moveGesture(
+        e.clientX,
+        e.clientY
+    )
+);
+
+canvas.addEventListener(
+    "mouseup",
+    endGesture
+);
+
+/* touch */
+
+canvas.addEventListener(
+    "touchstart",
+    e => {
+
+        const t = e.touches[0];
+
+        beginGesture(
+            t.clientX,
+            t.clientY
+        );
+    }
+);
+
+canvas.addEventListener(
+    "touchmove",
+    e => {
+
+        const t = e.touches[0];
+
+        moveGesture(
+            t.clientX,
+            t.clientY
+        );
+    }
+);
+
+canvas.addEventListener(
+    "touchend",
+    endGesture
+);
+
+/* -------------------------
+   COLLISION
+------------------------- */
 
 function checkCollision() {
 
@@ -94,20 +293,28 @@ function checkCollision() {
     for (let o of obstacles) {
 
         const obstacleLeft = o.x;
-        const obstacleRight = o.x + o.width;
+        const obstacleRight =
+            o.x + o.width;
 
         const obstacleTop =
-            canvas.height - 120 - o.height;
+            canvas.height -
+            120 -
+            o.height;
 
         const obstacleBottom =
             canvas.height - 120;
 
         if (
-            playerRight > obstacleLeft &&
-            playerLeft < obstacleRight &&
-            playerBottom > obstacleTop &&
-            playerTop < obstacleBottom
+            playerRight >
+                obstacleLeft &&
+            playerLeft <
+                obstacleRight &&
+            playerBottom >
+                obstacleTop &&
+            playerTop <
+                obstacleBottom
         ) {
+
             gameOver = true;
             return;
         }
@@ -118,9 +325,15 @@ function update() {
 
     if (gameOver) return;
 
-    power = Math.max(0, power - 0.05);
+    power = Math.max(
+        0,
+        power - 0.05
+    );
 
-    const speed = 3 + power * 0.15;
+    const speed =
+        3 +
+        power * 0.15 +
+        combo * 0.2;
 
     distance += speed / 10;
 
@@ -128,12 +341,14 @@ function update() {
     player.y += player.vy;
 
     if (player.y > 0) {
+
         player.y = 0;
         player.vy = 0;
         player.jumping = false;
     }
 
-    player.rotation += speed * 0.03;
+    player.rotation +=
+        speed * 0.03;
 
     obstacles.forEach(o => {
         o.x -= speed;
@@ -141,18 +356,31 @@ function update() {
 
     checkCollision();
 
-    document.getElementById("distance").textContent =
+    document.getElementById(
+        "distance"
+    ).textContent =
         Math.floor(distance);
 
-    document.getElementById("power").textContent =
+    document.getElementById(
+        "power"
+    ).textContent =
         Math.floor(power);
+
+    document.getElementById(
+        "combo"
+    ).textContent =
+        combo;
 }
 
 function draw() {
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.clearRect(
+        0,
+        0,
+        canvas.width,
+        canvas.height
+    );
 
-    // שמיים
     ctx.fillStyle = "#8fd3ff";
     ctx.fillRect(
         0,
@@ -161,7 +389,6 @@ function draw() {
         canvas.height
     );
 
-    // רצפה
     ctx.fillStyle = "#7ac96f";
     ctx.fillRect(
         0,
@@ -170,25 +397,56 @@ function draw() {
         120
     );
 
-    // מכשולים
-    ctx.fillStyle = "orange";
-
     obstacles.forEach(o => {
+
+        ctx.fillStyle = "orange";
 
         ctx.fillRect(
             o.x,
-            canvas.height - 120 - o.height,
+            canvas.height -
+                120 -
+                o.height,
             o.width,
             o.height
         );
-
     });
 
-    // ג'ודוקא
+    // draw gesture path
+
+    if (points.length > 1) {
+
+        ctx.beginPath();
+
+        ctx.moveTo(
+            points[0][0],
+            points[0][1]
+        );
+
+        for (
+            let i = 1;
+            i < points.length;
+            i++
+        ) {
+
+            ctx.lineTo(
+                points[i][0],
+                points[i][1]
+            );
+        }
+
+        ctx.strokeStyle =
+            "#0066ff";
+
+        ctx.lineWidth = 5;
+
+        ctx.stroke();
+    }
+
     ctx.save();
 
     const py =
-        canvas.height - 145 + player.y;
+        canvas.height - 145 +
+        player.y;
 
     ctx.translate(
         player.x,
@@ -210,7 +468,6 @@ function draw() {
         50
     );
 
-    // חגורה
     ctx.fillStyle = "yellow";
 
     ctx.fillRect(
@@ -222,7 +479,6 @@ function draw() {
 
     ctx.restore();
 
-    // Game Over
     if (gameOver) {
 
         ctx.fillStyle =
@@ -237,26 +493,13 @@ function draw() {
 
         ctx.fillStyle = "white";
 
-        ctx.font = "50px Arial";
+        ctx.font =
+            "50px Arial";
 
         ctx.fillText(
             "נפסלת!",
             canvas.width / 2 - 80,
-            canvas.height / 2 - 20
-        );
-
-        ctx.font = "24px Arial";
-
-        ctx.fillText(
-            "לחץ R כדי להתחיל מחדש",
-            canvas.width / 2 - 120,
-            canvas.height / 2 + 30
-        );
-
-        ctx.fillText(
-            "מרחק: " + Math.floor(distance),
-            canvas.width / 2 - 50,
-            canvas.height / 2 + 70
+            canvas.height / 2
         );
     }
 }
