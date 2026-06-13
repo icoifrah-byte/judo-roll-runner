@@ -1,6 +1,11 @@
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 
+const judokaImg=new Image(); judokaImg.src="assets/judoka.png";
+const coneImg=new Image(); coneImg.src="assets/cone.png";
+const dojoImg=new Image(); dojoImg.src="assets/dojo-bg.png";
+let bgX=0;
+
 function resize() {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
@@ -32,7 +37,7 @@ function showFeedback(text) {
         if (feedbackEl.textContent === text) {
             feedbackEl.textContent = "";
         }
-    }, 700);
+    }, 1500);
 }
 
 function spawnObstacle() {
@@ -381,21 +386,9 @@ function draw() {
         canvas.height
     );
 
-    ctx.fillStyle = "#8fd3ff";
-    ctx.fillRect(
-        0,
-        0,
-        canvas.width,
-        canvas.height
-    );
-
-    ctx.fillStyle = "#7ac96f";
-    ctx.fillRect(
-        0,
-        canvas.height - 120,
-        canvas.width,
-        120
-    );
+    bgX-=2;if(bgX<=-canvas.width) bgX=0;
+    ctx.drawImage(dojoImg,bgX,0,canvas.width,canvas.height);
+    ctx.drawImage(dojoImg,bgX+canvas.width,0,canvas.width,canvas.height);
 
     obstacles.forEach(o => {
 
@@ -459,23 +452,7 @@ function draw() {
         ctx.rotate(player.rotation);
     }
 
-    ctx.fillStyle = "white";
-
-    ctx.fillRect(
-        -25,
-        -25,
-        50,
-        50
-    );
-
-    ctx.fillStyle = "yellow";
-
-    ctx.fillRect(
-        -24,
-        0,
-        48,
-        5
-    );
+    ctx.drawImage(judokaImg,-35,-55,70,105);
 
     ctx.restore();
 
